@@ -11,7 +11,12 @@ df_bitcoin = raw_data.dropna().copy()
 
 #print(df_bitcoin.head())
 
-# Get 1-Year Treasury Constant Maturity Rate (DGS1)
+# Fetch 1-Year Treasury Constant Maturity Rate (DGS1)
 df_dgs = pd.read_csv('/Users/quynhanhnguyen/Library/CloudStorage/GoogleDrive-quynhanh@aso.com.vn/My Drive/Nguyen_Thesis_2026-2027/Code source/Data/DGS1-2.csv')
 
-print(df_dgs.head())
+#print(df_dgs.head())
+
+# Create log return
+df_bitcoin["Log return"] = df_bitcoin["Close"] - df_bitcoin["Close"].shift(1)
+
+print(df_bitcoin.head())
