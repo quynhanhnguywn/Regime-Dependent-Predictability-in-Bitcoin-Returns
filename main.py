@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd 
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-
+import ruptures as rpt
 # Get Bitcoin
 ticker = ["BTC-USD"]
 
@@ -45,13 +45,13 @@ print("\n ----------- NUMBER OF MISSING VALUES ----------- \n", merged_df.isna()
 df = merged_df.dropna().copy()
 ### Creating technical indicators
 # Volatility with rolling window = 5
-df["Volatility_5_days"] = (df["Log return"].pow(2).rolling(5).mean()).pow(2)
+df["Volatility_5_days"] = (df["Log return"].pow(2).rolling(5).mean())
 
 # Volatility with rolling window = 20
-df["Volatility_20_days"] = (df["Log return"].pow(2).rolling(20).mean()).pow(2)
+df["Volatility_20_days"] = (df["Log return"].pow(2).rolling(20).mean())
 
 # Volatility with rolling window = 100
-df["Volatility_100_days"] = (df["Log return"].pow(2).rolling(100).mean()).pow(2)
+df["Volatility_100_days"] = (df["Log return"].pow(2).rolling(100).mean())
 
 # Today's return
 df["Lag_1"] = df["Close"].shift(1)
@@ -141,3 +141,55 @@ X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
 print(df.tail())
+
+# set date as index first
+df = df.set_index('observation_date')
+df.index = pd.to_datetime(df.index)  # Ensure it's DatetimeIndex
+
+for n in [5, 20, 100]:
+    # Work with log-transformed series
+    log_vol = np.log(df[f"Volatility_{n}_days"]).dropna()
+    signal = log_vol.values
+    N = len(signal)
+
+    # non-parametric PELT
+    # min_size corresponds to min_segment_length=20
+    algo = rpt.Pelt(model="rbf", min_size=20)
+    algo.fit(signal)
+
+    # Compute a BIC/MBIC-style penalty for PELT: beta = 3 * log(N)
+    penalty = 3 * np.log(N)
+
+    # predict() returns segment end-indices, ending with N (e.g., [45, 120, N])
+    cp_indices = algo.predict(pen=penalty)
+
+    # Change points are all boundary indices except the final length N
+    changepoints = cp_indices[:-1]
+
+    print(f"Detected Change Point Indices of {n} days volatility:")
+    print(changepoints)
+    print(f"Total Number of Change Points: {len(changepoints)}")
+
+    # Construct boundaries starting from 0 to N
+    boundaries = [0] + cp_indices
+
+    segment_stats = []
+    for i in range(len(boundaries) - 1):
+        start, end = boundaries[i], boundaries[i + 1]
+        segment = log_vol.iloc[start:end]
+
+        segment_stats.append({
+            "segment_id": i,
+            "start_idx": start,
+            "end_idx": end - 1,                      # inclusive
+            "start_date": log_vol.index[start],
+            "end_date": log_vol.index[end - 1],
+            "n_obs": len(segment),
+            "mean": segment.mean(),
+            "variance": segment.var(),               # sample variance (ddof=1)
+            "std": segment.std(),
+        })
+
+    segments_df = pd.DataFrame(segment_stats)
+    segments_df.to_csv(f"EDPELT_{n}_day.csv", index=False)
+    print(segments_df)
