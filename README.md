@@ -11,7 +11,7 @@
 
 * **Log return**: Daily log return calculated as $r_t = \ln(P_t / P_{t-1})$, serving as a stationary measure of price change.
 
-## Variables
+## Predictors
 
 ### Base Market Data & Macro Indicators
 
